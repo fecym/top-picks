@@ -381,7 +381,7 @@ function getMockData() {
 }
 
 // 获取书签列表
-export async function getBookmarks() {
+export function getBookmarks() {
   return request('/bookmarks/list');
 }
 

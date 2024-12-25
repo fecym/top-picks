@@ -1,175 +1,108 @@
-// import 'reset.css'
-// import './index.css'
+import {getBookmarks} from './api.js';
+import {renderBookmarksList} from './renderUtils.js';
+import {
+  bookmarkStore,
+  handleError,
+  updateSearchResults,
+  handleBookmarkImport,
+  debounce,
+  clearSearch
+} from './utils.js';
 
-import { getBookmarks, getCategoryIcon } from './api.js';
-import { debounce, updateSearchResults, clearSearch, handleBookmarkImport } from './utils.js';
+const getElementById = id => document.getElementById(id);
 
-let bookmarksData = []; // 存储所有书签数据
-
-/**
- * 渲染书签列表
- * @param {Array} bookmarks 书签数据
- */
-function renderBookmarksList(bookmarks) {
-  const container = document.getElementById('bookmarks');
-  const fragment = document.createDocumentFragment();
-
-  // 按category分组
-  const groupedBookmarks = groupBookmarksByCategory(bookmarks);
-
-  // 渲染分组后的数据
-  Object.entries(groupedBookmarks).forEach(([category, data]) => {
-    const categoryElement = createCategoryElement(category, data);
-    fragment.appendChild(categoryElement);
-  });
-
-  // 一次性更新 DOM
-  requestAnimationFrame(() => {
-    container.innerHTML = '';
-    container.appendChild(fragment);
-  });
-}
-
-/**
- * 按分类对书签进行分组
- * @param {Array} bookmarks 书签数据
- * @returns {Object} 分组后的数据
- */
-function groupBookmarksByCategory(bookmarks) {
-  return bookmarks.reduce((acc, bookmark) => {
-    const category = bookmark.category;
-    if (!acc[category]) {
-      acc[category] = {
-        name: `${getCategoryIcon(category)} ${bookmark.categoryName.split(' ').slice(1).join(' ')}`,
-        items: []
-      };
-    }
-    acc[category].items.push(bookmark);
-    return acc;
-  }, {});
-}
-
-/**
- * 创建分类元素
- * @param {string} category 分类名
- * @param {Object} data 分类数据
- * @returns {HTMLElement} 分类元素
- */
-function createCategoryElement(category, data) {
-  const element = document.createElement('div');
-  element.className = 'category';
-  element.setAttribute('data-type', category.toLowerCase());
-
-  element.innerHTML = `
-    <h2>${data.name}</h2>
-    <div class="links">
-      ${data.items.map(createBookmarkCard).join('')}
-    </div>
-  `;
-
-  return element;
-}
-
-/**
- * 创建书签卡片HTML
- * @param {Object} item 书签数据
- * @returns {string} 卡片HTML
- */
-function createBookmarkCard(item) {
-  return `
-    <div class="link-card">
-      <a class="card-link" href="${item.url}" target="_blank" aria-label="${item.title}"></a>
-      <h3>${item.title}</h3>
-      <p>${item.description}</p>
-    </div>
-  `;
-}
+// DOM 元素缓存
+const ELEMENTS = {
+  get bookmarks() {
+    return getElementById('bookmarks')
+  },
+  get searchInput() {
+    return getElementById('searchInput')
+  },
+  get clearSearchBtn() {
+    return getElementById('clearSearch')
+  },
+  get importBtn() {
+    return getElementById('importBtn')
+  },
+  get importFile() {
+    return getElementById('importFile')
+  }
+};
 
 /**
  * 处理搜索
- * @param {Event} event 输入事件
  */
 function handleSearch(event) {
   const searchTerm = event.target.value.toLowerCase().trim();
+  const bookmarks = bookmarkStore.getBookmarks();
 
   if (!searchTerm) {
-    renderBookmarksList(bookmarksData);
-    updateSearchResults(bookmarksData.length, '');
+    renderBookmarksList(bookmarks, ELEMENTS.bookmarks);
+    updateSearchResults(bookmarks.length, '');
     return;
   }
 
-  const filteredBookmarks = bookmarksData.filter(bookmark =>
+  const filteredBookmarks = bookmarks.filter(bookmark =>
     bookmark.title.toLowerCase().includes(searchTerm) ||
     bookmark.description.toLowerCase().includes(searchTerm)
   );
 
-  requestAnimationFrame(() => {
-    renderBookmarksList(filteredBookmarks);
-    updateSearchResults(filteredBookmarks.length, searchTerm);
-  });
+  renderBookmarksList(filteredBookmarks, ELEMENTS.bookmarks);
+  updateSearchResults(filteredBookmarks.length, searchTerm);
 }
+
+/**
+ * 初始化导入功能
+ */
+function initImport() {
+  const handleFileSelect = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const importedBookmarks = await handleBookmarkImport(file);
+    if (importedBookmarks) {
+      const allBookmarks = bookmarkStore.addBookmarks(importedBookmarks);
+      renderBookmarksList(allBookmarks, ELEMENTS.bookmarks);
+      event.target.value = '';
+    }
+  };
+
+  ELEMENTS.importBtn.addEventListener('click', () => ELEMENTS.importFile.click());
+  ELEMENTS.importFile.addEventListener('change', handleFileSelect);
+};
 
 /**
  * 初始化渲染
  */
-async function renderBookmarks() {
-  const container = document.getElementById('bookmarks');
+async function initializeApp() {
   try {
-    container.innerHTML = '<div class="loading">加载中...</div>';
+    ELEMENTS.bookmarks.innerHTML = '<div class="loading">加载中...</div>';
     const response = await getBookmarks();
+
     if (response.code === 0) {
-      bookmarksData = response.data;
-      renderBookmarksList(bookmarksData);
+      bookmarkStore.setBookmarks(response.data);
+      renderBookmarksList(response.data, ELEMENTS.bookmarks);
     } else {
       throw new Error(response.message || '加载失败');
     }
   } catch (error) {
-    console.error('Failed to load bookmarks:', error);
-    container.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+    handleError(error, '加载失败');
+    ELEMENTS.bookmarks.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
   }
 }
 
-/**
- * 添加导入相关代码
- */
-function initImport() {
-  const importBtn = document.getElementById('importBtn');
-  const importFile = document.getElementById('importFile');
-
-  importBtn.addEventListener('click', () => {
-    importFile.click();
+// 初始化应用
+document.addEventListener('DOMContentLoaded', () => {
+  const debouncedSearch = debounce(handleSearch, 200);
+  ELEMENTS.searchInput.addEventListener('input', debouncedSearch);
+  ELEMENTS.clearSearchBtn.addEventListener('click', () => {
+    clearSearch(ELEMENTS.searchInput);
+    const bookmarks = bookmarkStore.getBookmarks();
+    renderBookmarksList(bookmarks, ELEMENTS.bookmarks);
+    updateSearchResults(bookmarks.length, '');
   });
 
-  importFile.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    try {
-      const importedBookmarks = await handleBookmarkImport(file);
-      // 合并书签数据
-      bookmarksData = [...bookmarksData, ...importedBookmarks];
-      renderBookmarksList(bookmarksData);
-      // 清除文件选择
-      event.target.value = '';
-      // 显示成功提示
-      alert(`成功导入 ${importedBookmarks.length} 个书签`);
-    } catch (error) {
-      console.error('Import failed:', error);
-      alert(error.message);
-    }
-  });
-}
-
-/**
- * 初始化
- */
-function init() {
-  const debouncedSearch = debounce(handleSearch);
-  document.getElementById('searchInput').addEventListener('input', debouncedSearch);
-  document.getElementById('clearSearch').addEventListener('click', () => clearSearch(renderBookmarksList, bookmarksData));
-  initImport(); // 初始化导入功能
-  renderBookmarks();
-}
-
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', init);
+  initImport();
+  initializeApp();
+});
