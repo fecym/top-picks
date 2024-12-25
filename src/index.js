@@ -2,7 +2,7 @@
 // import './index.css'
 
 import { getBookmarks, getCategoryIcon } from './api.js';
-import { debounce, updateSearchResults, clearSearch } from './utils.js';
+import { debounce, updateSearchResults, clearSearch, handleBookmarkImport } from './utils.js';
 
 let bookmarksData = []; // 存储所有书签数据
 
@@ -130,12 +130,44 @@ async function renderBookmarks() {
 }
 
 /**
+ * 添加导入相关代码
+ */
+function initImport() {
+  const importBtn = document.getElementById('importBtn');
+  const importFile = document.getElementById('importFile');
+
+  importBtn.addEventListener('click', () => {
+    importFile.click();
+  });
+
+  importFile.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const importedBookmarks = await handleBookmarkImport(file);
+      // 合并书签数据
+      bookmarksData = [...bookmarksData, ...importedBookmarks];
+      renderBookmarksList(bookmarksData);
+      // 清除文件选择
+      event.target.value = '';
+      // 显示成功提示
+      alert(`成功导入 ${importedBookmarks.length} 个书签`);
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert(error.message);
+    }
+  });
+}
+
+/**
  * 初始化
  */
 function init() {
   const debouncedSearch = debounce(handleSearch);
   document.getElementById('searchInput').addEventListener('input', debouncedSearch);
   document.getElementById('clearSearch').addEventListener('click', () => clearSearch(renderBookmarksList, bookmarksData));
+  initImport(); // 初始化导入功能
   renderBookmarks();
 }
 

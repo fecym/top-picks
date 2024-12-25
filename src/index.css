@@ -700,3 +700,54 @@ h1 {
     max-width: 95%;
   }
 }
+
+/* 添加导入相关样式 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.import-box {
+  position: relative;
+}
+
+.import-btn {
+  padding: 8px 16px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.hidden {
+  display: none;
+}
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .header-right {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .import-box {
+    width: 90%;
+  }
+
+  .import-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
