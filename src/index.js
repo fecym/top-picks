@@ -1,29 +1,42 @@
+// import 'reset.css'
+// import './index.css'
+
 import { getBookmarks, getCategoryIcon } from './api.js';
+import { debounce, updateSearchResults, clearSearch } from './utils.js';
 
 let bookmarksData = []; // 存储所有书签数据
 
-// 渲染函数
-async function renderBookmarks() {
-  const container = document.getElementById('bookmarks');
-  try {
-    const response = await getBookmarks();
-    if (response.code === 0) {
-      bookmarksData = response.data; // 保存数据到全局变量
-      renderBookmarksList(bookmarksData);
-    }
-  } catch (error) {
-    console.error('Failed to load bookmarks:', error);
-    // 可以添加错误提示UI
-  }
-}
-
-// 渲染书签列表
+/**
+ * 渲染书签列表
+ * @param {Array} bookmarks 书签数据
+ */
 function renderBookmarksList(bookmarks) {
   const container = document.getElementById('bookmarks');
-  container.innerHTML = ''; // 清空容器
+  const fragment = document.createDocumentFragment();
 
   // 按category分组
-  const groupedBookmarks = bookmarks.reduce((acc, bookmark) => {
+  const groupedBookmarks = groupBookmarksByCategory(bookmarks);
+
+  // 渲染分组后的数据
+  Object.entries(groupedBookmarks).forEach(([category, data]) => {
+    const categoryElement = createCategoryElement(category, data);
+    fragment.appendChild(categoryElement);
+  });
+
+  // 一次性更新 DOM
+  requestAnimationFrame(() => {
+    container.innerHTML = '';
+    container.appendChild(fragment);
+  });
+}
+
+/**
+ * 按分类对书签进行分组
+ * @param {Array} bookmarks 书签数据
+ * @returns {Object} 分组后的数据
+ */
+function groupBookmarksByCategory(bookmarks) {
+  return bookmarks.reduce((acc, bookmark) => {
     const category = bookmark.category;
     if (!acc[category]) {
       acc[category] = {
@@ -34,82 +47,95 @@ function renderBookmarksList(bookmarks) {
     acc[category].items.push(bookmark);
     return acc;
   }, {});
-
-  // 渲染分组后的数据
-  Object.entries(groupedBookmarks).forEach(([category, data]) => {
-    const categoryElement = document.createElement('div');
-    categoryElement.className = 'category';
-
-    categoryElement.innerHTML = `
-      <h2>${data.name}</h2>
-      <div class="links">
-        ${data.items.map(item => `
-          <div class="link-card">
-            <a class="card-link" href="${item.url}" target="_blank" aria-label="${item.title}"></a>
-            <h3>${item.title}</h3>
-            <p>${item.description}</p>
-          </div>
-        `).join('')}
-      </div>
-    `;
-
-    container.appendChild(categoryElement);
-  });
 }
 
-// 本地搜索功能
+/**
+ * 创建分类元素
+ * @param {string} category 分类名
+ * @param {Object} data 分类数据
+ * @returns {HTMLElement} 分类元素
+ */
+function createCategoryElement(category, data) {
+  const element = document.createElement('div');
+  element.className = 'category';
+  element.setAttribute('data-type', category.toLowerCase());
+
+  element.innerHTML = `
+    <h2>${data.name}</h2>
+    <div class="links">
+      ${data.items.map(createBookmarkCard).join('')}
+    </div>
+  `;
+
+  return element;
+}
+
+/**
+ * 创建书签卡片HTML
+ * @param {Object} item 书签数据
+ * @returns {string} 卡片HTML
+ */
+function createBookmarkCard(item) {
+  return `
+    <div class="link-card">
+      <a class="card-link" href="${item.url}" target="_blank" aria-label="${item.title}"></a>
+      <h3>${item.title}</h3>
+      <p>${item.description}</p>
+    </div>
+  `;
+}
+
+/**
+ * 处理搜索
+ * @param {Event} event 输入事件
+ */
 function handleSearch(event) {
-  const searchTerm = event.target.value.toLowerCase();
+  const searchTerm = event.target.value.toLowerCase().trim();
 
   if (!searchTerm) {
-    renderBookmarksList(bookmarksData); // 搜索词为空时显示所有数据
+    renderBookmarksList(bookmarksData);
     updateSearchResults(bookmarksData.length, '');
     return;
   }
 
-  // 在本地数据中搜索
   const filteredBookmarks = bookmarksData.filter(bookmark =>
     bookmark.title.toLowerCase().includes(searchTerm) ||
     bookmark.description.toLowerCase().includes(searchTerm)
   );
 
-  renderBookmarksList(filteredBookmarks);
-  updateSearchResults(filteredBookmarks.length, searchTerm);
+  requestAnimationFrame(() => {
+    renderBookmarksList(filteredBookmarks);
+    updateSearchResults(filteredBookmarks.length, searchTerm);
+  });
 }
 
-// 清除搜索
-function clearSearch() {
-  const searchInput = document.getElementById('searchInput');
-  searchInput.value = '';
-  searchInput.focus();
-  renderBookmarksList(bookmarksData); // 恢复显示所有数据
-  updateSearchResults(bookmarksData.length, '');
-}
-
-// 更新搜索结果数量
-function updateSearchResults(count, searchTerm) {
-  let resultsDiv = document.querySelector('.search-results');
-  if (!resultsDiv) {
-    resultsDiv = document.createElement('div');
-    resultsDiv.className = 'search-results';
-    document.querySelector('.search-box').appendChild(resultsDiv);
-  }
-
-  if (searchTerm) {
-    resultsDiv.textContent = `找到 ${count} 个结果`;
-    resultsDiv.classList.add('visible');
-  } else {
-    resultsDiv.classList.remove('visible');
+/**
+ * 初始化渲染
+ */
+async function renderBookmarks() {
+  const container = document.getElementById('bookmarks');
+  try {
+    container.innerHTML = '<div class="loading">加载中...</div>';
+    const response = await getBookmarks();
+    if (response.code === 0) {
+      bookmarksData = response.data;
+      renderBookmarksList(bookmarksData);
+    } else {
+      throw new Error(response.message || '加载失败');
+    }
+  } catch (error) {
+    console.error('Failed to load bookmarks:', error);
+    container.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
   }
 }
 
-// 初始化
+/**
+ * 初始化
+ */
 function init() {
-  // 添加搜索事件监听
-  document.getElementById('searchInput').addEventListener('input', handleSearch);
-  document.getElementById('clearSearch').addEventListener('click', clearSearch);
-
-  // 加载数据
+  const debouncedSearch = debounce(handleSearch);
+  document.getElementById('searchInput').addEventListener('input', debouncedSearch);
+  document.getElementById('clearSearch').addEventListener('click', () => clearSearch(renderBookmarksList, bookmarksData));
   renderBookmarks();
 }
 
