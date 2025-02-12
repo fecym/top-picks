@@ -8,6 +8,8 @@ import {
   debounce,
   clearSearch
 } from './utils.js';
+import startMicroApp,  {isMicroApp} from "./micro-app.js";
+import './index.css';
 
 const getElementById = id => document.getElementById(id);
 
@@ -92,8 +94,7 @@ async function initializeApp() {
   }
 }
 
-// 初始化应用
-document.addEventListener('DOMContentLoaded', () => {
+function init() {
   const debouncedSearch = debounce(handleSearch, 200);
   ELEMENTS.searchInput.addEventListener('input', debouncedSearch);
   ELEMENTS.clearSearchBtn.addEventListener('click', () => {
@@ -104,5 +105,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   initImport();
-  initializeApp();
-});
+  initializeApp()
+}
+
+if (!isMicroApp()) {
+  window.addEventListener('DOMContentLoaded', init);
+} else {
+  console.log('微前端环境')
+  startMicroApp(init)
+}
+

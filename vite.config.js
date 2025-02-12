@@ -3,6 +3,13 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: './src',
   base: './',
+  server: {
+    open: true,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+    },
+    host: "0.0.0.0",
+  },
   build: {
     outDir: '../dist',
     minify: 'terser',
