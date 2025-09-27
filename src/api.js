@@ -1,5 +1,6 @@
 // 接口基础配置
 const API_BASE_URL = 'http://chengyuming.cn/api';
+// const API_BASE_URL = 'http://localhost:4000/api';
 
 // Emoji 映射表
 const CATEGORY_ICONS = {
@@ -382,7 +383,8 @@ function getMockData() {
 
 // 获取书签列表
 export function getBookmarks() {
-  return request('/bookmarks/list');
+  // return request('/bookmarks/list');
+  return request('/tools');
 }
 
 // 导出函数供其他模块使用
